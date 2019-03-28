@@ -1,7 +1,7 @@
 const app = document.querySelector('.app'),
       currentImage = document.querySelector('.current-image');
 
-let modeState;
+let modeState, currentImageId, currentImageLink, currentImageTimestamp;
 
 const menu = document.querySelector('.menu'),
       menuBtns = document.querySelectorAll('.menu__item'),
@@ -16,10 +16,12 @@ const menu = document.querySelector('.menu'),
       menuShareTools = document.querySelector('.share-tools');
 
 const menuCommentsTools = document.querySelector('.comments-tools'),
-      menuCommentsToolsToggleInputs = document.querySelectorAll('.menu__toggle'),
-      firstCommentsForm = document.querySelector('.comments__form');
-      
+      menuCommentsToolsToggleInputs = document.querySelectorAll('.menu__toggle');
 
+const error = document.querySelector('.error'),
+      errorMsg = document.querySelector('.error__message');
+      
+console.log(document.location.href)
 initMenuDragging();
 initBurger();
 initPostingMode();
@@ -37,7 +39,9 @@ function initPostingMode() {
   
   menuAddNewBtn.addEventListener('click', event => input.click())
   
-  input.addEventListener('change', event => sendImg(event.currentTarget.files[0]));
+  input.addEventListener('change', event => {
+    if (event.currentTarget.files[0]) sendImg(event.currentTarget.files[0]);
+  });
   
   document.addEventListener('dragover', event => event.preventDefault());
   
@@ -54,19 +58,62 @@ function initPostingMode() {
   });
   
   function sendImg(file) {
-    const preloader = document.querySelector('.image-loader');
-  
+    const preloader = document.querySelector('.image-loader'),
+          formData = new FormData();
+    console.log(file)
+    formData.append('title', file.name);
+    formData.append('image', file);
+    
+    error.style = 'display: none;'
     preloader.style = 'display: block;';
-    currentImage.src = URL.createObjectURL(file);
-    currentImage.addEventListener('load', event => {
-      preloader.style = 'display: none;';
-      reviewModeOn('share');
-      initDrawingMode();
-      initCommentingMode();
-      initSharingMode();
+    fetch('https://neto-api.herokuapp.com/pic', {
+      body: formData,
+      method: 'POST'
+//      headers: {
+//      'Content-Type': 'multipart/form-data'
+//      }
+    })
+    .then((res) => {
+      if (200 <= res.status && res.status < 300) {
+        return res;
+      };
+      throw new Error(response.statusText);
+    })
+    .then((res) => { return res.json(); })
+    .then((data) => {
+      console.log(data)
       
-      URL.revokeObjectURL(event.target.src);
+      currentImageId = data.id;
+      currentImageLink = data.url;
+      currentImageTimestamp = data.timestamp;
+      currentImage.src = currentImageLink;
+      
+      currentImage.addEventListener('load', event => {
+        preloader.style = 'display: none;';
+        initDrawingMode();
+        initCommentingMode();
+        initSharingMode();
+        reviewModeOn('share');
+      });
+      
+    })
+    .catch((e) => {
+      preloader.style = 'display: none;';
+      errorMsg.textContent = 'Не удалось загрузить изображение. Пожалуйста, попробуйте снова.'
+      error.style = 'display: block;'
     });
+    
+    
+//    currentImage.src = URL.createObjectURL(file);
+//    currentImage.addEventListener('load', event => {
+//      preloader.style = 'display: none;';
+//      reviewModeOn('share');
+//      initDrawingMode();
+//      initCommentingMode();
+//      initSharingMode();
+//      
+//      URL.revokeObjectURL(event.target.src);
+//    });
 //    fetch()
   }
 };
@@ -223,9 +270,8 @@ function initCommentingMode() {
 };
 
 function initDrawingMode() {
-  const previousCanvas = document.querySelector('canvas');
-  
   //  удаляем canvas предыдущего изображения, если есть
+  const previousCanvas = document.querySelector('canvas');
   if (previousCanvas) app.removeChild(previousCanvas);
   
   const imageBorder = currentImage.getBoundingClientRect(), 
@@ -300,6 +346,9 @@ function initSharingMode() {
   
   const url = menuShareTools.querySelector('.menu__url'),
         copyBtn = menuShareTools.querySelector('.menu_copy');
+  
+  
+  url.value = currentImageLink;
   
   copyBtn.addEventListener('click', event => {
     url.select();
