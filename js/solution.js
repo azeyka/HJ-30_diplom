@@ -1,7 +1,9 @@
 const app = document.querySelector('.app'),
-      currentImage = document.querySelector('.current-image');
+      currentImage = document.querySelector('.current-image'),
+      preloader = document.querySelector('.image-loader');
 
-let modeState, currentImageId, currentImageLink, currentImageTimestamp;
+let modeState, currentImageId, currentImageLink, currentImageTimestamp,
+    webSocket;
 
 const menu = document.querySelector('.menu'),
       menuBtns = document.querySelectorAll('.menu__item'),
@@ -21,13 +23,60 @@ const menuCommentsTools = document.querySelector('.comments-tools'),
 const error = document.querySelector('.error'),
       errorMsg = document.querySelector('.error__message');
       
-console.log(document.location.href)
 initMenuDragging();
 initBurger();
 initPostingMode();
 
+window.location.search ? loadExistingImage((window.location.search).split('=')[1]) : postingModeOn();
 
-currentImage.src ? reviewModeOn('share') : postingModeOn();
+function loadExistingImage(id) {
+  reviewModeOn('comments');
+  preloader.style = 'display: block;';
+  webSocket = new WebSocket(`wss://neto-api.herokuapp.com/pic/${id}`);
+  
+  webSocket.addEventListener('message', event => {
+    try {
+      const data = JSON.parse(event.data)
+      console.log(data)
+      
+      if (data.event === 'pic') {
+        webSocketPic(data.pic);
+      } else if (data.event === 'comment') {
+        addLoadedComments({comment: data.comment});
+      } else if (data.event === 'mask') {
+        addLoadedMask(data.url)
+      }
+      
+    } catch (e) {
+      onError();
+    }
+  })
+  
+  webSocket.addEventListener('error', event => onError)
+  
+  const onError = () => {
+    postingModeOn();
+    preloader.style = 'display: none;';
+    errorMsg.textContent = 'Не удалось загрузить изображение. Пожалуйста, перезагрузите страницу или загрузите новое изображение.'
+    error.style = 'display: block;'
+  };
+  
+};
+
+function webSocketPic(data) {
+  currentImageId = data.id;
+  currentImageLink = data.url;
+  currentImageTimestamp = data.timestamp;
+  currentImage.src = currentImageLink;
+
+  // инициализируем моды с полученными данными после загрузки изображения
+  currentImage.addEventListener('load', event => {
+    preloader.style = 'display: none;';
+    initDrawingMode(data.mask);
+    initCommentingMode(data.comments);
+    initSharingMode();
+  });
+};
 
 function initPostingMode() {
   const input = document.createElement('input');
@@ -58,9 +107,7 @@ function initPostingMode() {
   });
   
   function sendImg(file) {
-    const preloader = document.querySelector('.image-loader'),
-          formData = new FormData();
-    console.log(file)
+    const formData = new FormData();
     formData.append('title', file.name);
     formData.append('image', file);
     
@@ -69,9 +116,6 @@ function initPostingMode() {
     fetch('https://neto-api.herokuapp.com/pic', {
       body: formData,
       method: 'POST'
-//      headers: {
-//      'Content-Type': 'multipart/form-data'
-//      }
     })
     .then((res) => {
       if (200 <= res.status && res.status < 300) {
@@ -88,37 +132,25 @@ function initPostingMode() {
       currentImageTimestamp = data.timestamp;
       currentImage.src = currentImageLink;
       
+      // инициализируем моды, запускаем вебсокет и переходим в режим поделиться после загрузки изображения
       currentImage.addEventListener('load', event => {
         preloader.style = 'display: none;';
         initDrawingMode();
         initCommentingMode();
         initSharingMode();
+        webSocket = new WebSocket(`wss://neto-api.herokuapp.com/pic/${currentImageId}`);
         reviewModeOn('share');
       });
-      
     })
     .catch((e) => {
       preloader.style = 'display: none;';
       errorMsg.textContent = 'Не удалось загрузить изображение. Пожалуйста, попробуйте снова.'
       error.style = 'display: block;'
     });
-    
-    
-//    currentImage.src = URL.createObjectURL(file);
-//    currentImage.addEventListener('load', event => {
-//      preloader.style = 'display: none;';
-//      reviewModeOn('share');
-//      initDrawingMode();
-//      initCommentingMode();
-//      initSharingMode();
-//      
-//      URL.revokeObjectURL(event.target.src);
-//    });
-//    fetch()
   }
 };
 
-function initCommentingMode() {
+function initCommentingMode(loadedComments) {
   const canvas = document.getElementById('canvas'),
         previousCommentsForm = document.querySelector('.comments__forms');
   
@@ -149,133 +181,29 @@ function initCommentingMode() {
 //  Добавление новой формы в месте клика
   canvas.addEventListener('click', event => {
     if (modeState === 'comments') {
-      const commentsForms = document.querySelectorAll('.comments__form'),
-            form = createCommentForm(event.clientX, event.clientY),
-            commentsBody = form.querySelector('.comments__body'),
-            textarea = form.querySelector('.comments__input'),
-            closeBtn = form.querySelector('.comments__close'),
-            sendBtn = form.querySelector('.comments__submit'),
-            loader = form.querySelector('.loader').parentElement,
-            markerInput = form.querySelector('.comments__marker-checkbox');
-      
-      const removeForm = function () {
-        form.parentElement.removeChild(form);
-      }
-      
-      closeBtn.addEventListener('click', removeForm);
-      
-      sendBtn.addEventListener('click', event => {
-        event.preventDefault();
-        if (textarea.value) {
-          const comment = createComment(getCurrentTime(), textarea.value);
-          
-//          fetch() send comment then
-          //      loader.style = 'display: block;'
-          commentsBody.appendChild(comment)
-          textarea.value = ''
-          markerInput.removeAttribute('disabled');
-          
-          // Перепрограммируем кнопку закрыть на сворачивание формы
-          closeBtn.removeEventListener('click', removeForm);
-          closeBtn.addEventListener('click', event => {
-            markerInput.checked = false;
-          });
-          
-          
-        }
-      });
-      
-      // При клике на маркер формы сворачиваем остальные
-      markerInput.addEventListener('click', event => {
-        if (event.target.checked) {
-          const markers = document.querySelectorAll('.comments__marker-checkbox');
-          Array.from(markers).forEach(marker => {
-            if (!(marker === event.target)) marker.checked = false;
-          });
-        };
-      });
-      
-      markerInput.checked = true;
-      textarea.focus();
-      markerInput.setAttribute('disabled', 'disabled')
-
-//    При добавлении новой формы сворачиваем все остальные формы либо удаляем если комментарии не были добавлены
-      Array.from(commentsForms).forEach(previousForm => {
-        const markerInput = previousForm.querySelector('.comments__marker-checkbox');
-        if (markerInput.hasAttribute('disabled')) {
-          previousForm.parentElement.removeChild(previousForm);
-        } else {
-          markerInput.checked = false;
-        }; 
-      });
-      
-      
-
-      
-      
+      // Смещение посчитано вручную, зная ширину/высоту маркера и положение маркера относительно самой формы
+      // Смогу рассчитать с помощью JS только если уже есть формы с комментариями, но как быть если это первый комментарий? 
+      const shiftX = 22,
+            shiftY = 15;
+      addNewCommentForm(event.clientX - shiftX, event.clientY - shiftY);
     }
-  })
+  });
   
-  function createCommentForm(x, y) {
-    const form = el('form', {class: 'comments__form'}, [
-      el('span', {class: 'comments__marker'}, ''),
-      el('input', {type: 'checkbox', class: 'comments__marker-checkbox'}, ''),
-      el('div', {class: 'comments__body'}, [
-        el('div', {class: 'comment', style: 'display: none'}, [
-          el('div', {class: 'loader'}, [
-            el('span', {}, ''),
-            el('span', {}, ''),
-            el('span', {}, ''),
-            el('span', {}, ''),
-            el('span', {}, '')
-          ])
-        ]),
-        el('textarea', {class: 'comments__input', type: 'text', placeholder: 'Напишите комментарий...'}, ''),
-        el('input', {class: 'comments__close', type: 'button', value: 'Закрыть'}),
-        el('input', {class: 'comments__submit', type: 'submit', value: 'Отправить'})
-      ])
-    ]);
-    
-    commentsForms.appendChild(form)
-    
-    const marker = form.querySelector('.comments__marker');
-    form.style.left = `${x - 8 - marker.offsetWidth / 2}px`;
-    form.style.top = `${y + 10 - marker.offsetHeight}px`;
-    
-    return form
-  }
-  
-  function createComment(time, message) {
-    const comment = el('div', {class: 'comment'}, [
-      el('p', {class: 'comment__time'}, time),
-      el('p', {class: 'comment__message'}, message)
-    ])
-    return comment;
-  }
-  
-  function getCurrentTime() {
-    const time = new Date(),
-          dateArray = [
-            time.getFullYear() - 2000,
-            time.getMonth() + 1,
-            time.getDate(),
-            time.getHours(),
-            time.getMinutes(),
-            time.getSeconds()
-          ],
-          date = dateArray.map(element => {return element < 10 ?  '0' + element : element});
-
-    return `${date[0]}.${date[1]}.${date[2]} ${date[3]}:${date[4]}:${date[5]}`
-  }
+  if(loadedComments) addLoadedComments(loadedComments);
 };
 
-function initDrawingMode() {
-  //  удаляем canvas предыдущего изображения, если есть
-  const previousCanvas = document.querySelector('canvas');
+function initDrawingMode(loadedMask) {
+  let timestamp = new Date();
+  
+  //  удаляем canvas и маску предыдущего изображения, если есть
+  const previousCanvas = document.getElementById('canvas'),
+        previousMask = document.getElementById('mask');
   if (previousCanvas) app.removeChild(previousCanvas);
   
+  // Создаем новый canvas и маску по размеру изображения
   const imageBorder = currentImage.getBoundingClientRect(), 
-        canvas = document.createElement('canvas');
+        canvas = document.createElement('canvas'),
+        mask = document.createElement('img');
 
   canvas.id = 'canvas';
   canvas.width = imageBorder.width;
@@ -283,7 +211,15 @@ function initDrawingMode() {
   canvas.style.position = 'absolute';
   canvas.style.left = `${imageBorder.x}px`;
   canvas.style.top = `${imageBorder.y}px`;
-
+  
+  mask.id = 'mask';
+  mask.width = imageBorder.width;
+  mask.height = imageBorder.height;
+  mask.style.position = 'absolute';
+  mask.style.left = `${imageBorder.x}px`;
+  mask.style.top = `${imageBorder.y}px`;
+  
+  app.appendChild(mask);
   app.appendChild(canvas);
 
   const ctx = canvas.getContext('2d'),
@@ -299,7 +235,11 @@ function initDrawingMode() {
   let drawing = false,
       brushColor,
       previousPoint;
-
+  
+  //  загружаем уже существующую маску, если есть
+  if (loadedMask) addLoadedMask(loadedMask);
+  
+  // Переключение в режим рисования
   menuDrawBtn.addEventListener('click', event => {
     reviewModeOn('draw');
   });
@@ -311,6 +251,9 @@ function initDrawingMode() {
       Array.from(menuDrawTools.children).forEach(color => {
         if (color.checked) brushColor = colors[color.value];
       });
+      
+//      запуск отпрвки данных на сервер
+      tick();
     };
   })
   
@@ -319,11 +262,11 @@ function initDrawingMode() {
   }));
   
   canvas.addEventListener('mouseup', event => {
-    drawing = false;
+    drawing = false;    
   });
   
   canvas.addEventListener('mouseleave', event => {
-    drawing = false;
+    drawing = false;    
   });
   
   function draw(point) {
@@ -335,7 +278,27 @@ function initDrawingMode() {
     ctx.quadraticCurveTo(...previousPoint, ...point); 
     ctx.stroke();
     previousPoint = point;
-  }; 
+  };
+  
+  function tick() {
+    //обновление и очистка канваса каждые 2 секунды при рисовании и один раз после того как закончили штрих 
+    if (drawing === true) {
+      const now = new Date();
+      if (now - timestamp >= 2000) {
+        canvas.toBlob(img => webSocket.send(img));
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        timestamp = now;
+      };
+
+      window.requestAnimationFrame(tick);
+    } else {
+      canvas.toBlob(img => webSocket.send(img));
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+  };
+  
+
 };
 
 function initSharingMode() {
@@ -348,13 +311,14 @@ function initSharingMode() {
         copyBtn = menuShareTools.querySelector('.menu_copy');
   
   
-  url.value = currentImageLink;
+  url.value = `https://azeyka.github.io/HJ-30_diplom/?id=${currentImageId}`;
   
   copyBtn.addEventListener('click', event => {
     url.select();
     document.execCommand('copy');
   });
 };
+
 
 function postingModeOn() {
   Array.from(menuBtns).forEach(btn => {
@@ -380,6 +344,7 @@ function reviewModeOn(modeName) {
     };
   });
 };
+
 
 function initBurger() { 
   menuBurgerBtn.addEventListener('click', event => {
@@ -432,6 +397,192 @@ function initMenuDragging() {
   });
 };
 
+
+function createCommentForm(x, y) {
+    const commentsForms = document.querySelector('.comments__forms'),
+          form = el('form', {class: 'comments__form'}, [
+      el('span', {class: 'comments__marker'}, ''),
+      el('input', {type: 'checkbox', class: 'comments__marker-checkbox'}, ''),
+      el('div', {class: 'comments__body'}, [
+        el('div', {class: 'comment', style: 'display: none'}, [
+          el('div', {class: 'loader'}, [
+            el('span', {}, ''),
+            el('span', {}, ''),
+            el('span', {}, ''),
+            el('span', {}, ''),
+            el('span', {}, '')
+          ])
+        ]),
+        el('textarea', {class: 'comments__input', type: 'text', placeholder: 'Напишите комментарий...'}, ''),
+        el('input', {class: 'comments__close', type: 'button', value: 'Закрыть'}),
+        el('input', {class: 'comments__submit', type: 'submit', value: 'Отправить'})
+      ])
+    ]);
+    
+    commentsForms.appendChild(form)
+    
+  // Рассчитываем положение так, чтобы хвостик маркера был имеено в месте клика
+    const marker = form.querySelector('.comments__marker');
+    form.style.left = `${x}px`;
+    form.style.top = `${y}px`;
+    
+    return form
+  };
+  
+function createComment(time, message) {
+  const comment = el('div', {class: 'comment'}, [
+    el('p', {class: 'comment__time'}, time),
+    el('p', {class: 'comment__message'}, message)
+  ])
+  return comment;
+};
+
+function addNewCommentForm(x, y) {
+  const commentsForms = document.querySelectorAll('.comments__form'),
+        form = createCommentForm(x, y),
+        commentsBody = form.querySelector('.comments__body'),
+        textarea = form.querySelector('.comments__input'),
+        closeBtn = form.querySelector('.comments__close'),
+        sendBtn = form.querySelector('.comments__submit'),
+        preloader = form.querySelector('.loader').parentElement,
+        markerInput = form.querySelector('.comments__marker-checkbox');
+
+  const removeForm = () => { form.parentElement.removeChild(form); },
+        closeForm = () => { markerInput.checked = false; },
+        sendComment = () => {
+          if (textarea.value) {
+            const body = 'message=' + encodeURIComponent(textarea.value) +
+                         '&left=' + encodeURIComponent(form.style.left.split('px').join('')) +
+                         '&top=' + encodeURIComponent(form.style.top.split('px').join(''))
+          
+            preloader.style = 'display: block;'
+            textarea.value = '';
+            
+            fetch(`https://neto-api.herokuapp.com/pic/${currentImageId}/comments`, {
+              body: body,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            })
+            .then((res) => {
+                if (200 <= res.status && res.status < 300) {
+                  return res;
+                };
+                throw new Error(response.statusText);
+              })
+            .then((res) => { return res.json(); })
+            .then((data) => {
+              markerInput.removeAttribute('disabled');
+              preloader.style = 'display: none;';
+            })
+            .catch((e) => {
+              preloader.style = 'display: none;';
+            });                  
+            
+          };  
+        };
+
+//  Если в форме есть комментарии, то кнопка закрыть сворачивает форму, если нет, то удаляет
+  closeBtn.addEventListener('click', event => {
+    const comments = form.querySelectorAll('.comment');
+    comments.length <= 1 ? removeForm() : closeForm()    
+  });
+
+// Отправка комментария на кнопку отправить
+  sendBtn.addEventListener('click', event => {
+    event.preventDefault();
+    sendComment();
+  });
+
+// Отправка комментария на Enter
+  textarea.addEventListener('keydown', event => {
+    if (event.keyCode === 13) {
+      event.preventDefault()
+      sendComment();
+    };
+  });
+  
+// При клике на маркер формы сворачиваем остальные и удаляем пустые
+  markerInput.addEventListener('click', event => {
+    if (event.target.checked) {
+      const markers = document.querySelectorAll('.comments__marker-checkbox');
+      Array.from(markers).forEach(marker => {
+        if (!(marker === event.target)) marker.checked = false;
+        if (marker.hasAttribute('disabled')) marker.parentElement.parentElement.removeChild(marker.parentElement)
+      });
+    };
+  });
+  
+  markerInput.checked = true;
+  textarea.focus();
+  markerInput.setAttribute('disabled', 'disabled');
+
+// При добавлении формы сворачиваем остальные и удаляем пустые
+  Array.from(commentsForms).forEach(previousForm => {
+    const markerInput = previousForm.querySelector('.comments__marker-checkbox');
+    if (markerInput.hasAttribute('disabled')) {
+      previousForm.parentElement.removeChild(previousForm);
+    } else {
+      markerInput.checked = false;
+    }; 
+  });
+  
+  return form;
+};
+
+function addLoadedComments(loadedComments) {
+  let currentForm;
+  console.log(loadedComments)
+  Object.keys(loadedComments).forEach(key => {
+    const commentsForms = document.querySelectorAll('.comments__form'),
+          x = loadedComments[key].left,
+          y = loadedComments[key].top;
+    
+    const existingForm = Array.from(commentsForms).find(commentsForm => {
+      return commentsForm.style.left === `${x}px` && commentsForm.style.top === `${y}px`
+    });
+    
+    currentForm = existingForm ? existingForm : addNewCommentForm(x, y)
+           
+    const commentBody = currentForm.querySelector('.comments__body'),
+          preloader = currentForm.querySelector('.loader').parentElement,
+          markerInput = currentForm.querySelector('.comments__marker-checkbox');
+
+    const comment = createComment(getTime(loadedComments[key].timestamp), loadedComments[key].message);
+    commentBody.insertBefore(comment, preloader)
+    markerInput.removeAttribute('disabled');
+  });
+};
+
+
+function addLoadedMask(maskLink) {
+  const mask = document.getElementById('mask');
+  mask.src = maskLink;
+  
+  // Как только загрузится обнолвенная маска, очищаем канвас
+  mask.addEventListener('load', event => {
+    const canvas = document.getElementById('canvas'),
+          ctx = canvas.getContext('2d');
+          
+  })
+};
+
+function getTime(timestamp) {
+  const time = timestamp ? new Date(timestamp) : new Date(),
+        dateArray = [
+          time.getFullYear() - 2000,
+          time.getMonth() + 1,
+          time.getDate(),
+          time.getHours(),
+          time.getMinutes(),
+          time.getSeconds()
+        ],
+        date = dateArray.map(element => {return element < 10 ?  '0' + element : element});
+
+  return `${date[2]}.${date[1]}.${date[0]} ${date[3]}:${date[4]}:${date[5]}`
+}; 
+
 function throttle(callback) {
   let isWaiting = false;
   return function () {
@@ -471,6 +622,3 @@ function el(tagName, attributes, children) {
   };
   return element;
 };
-
-
-
