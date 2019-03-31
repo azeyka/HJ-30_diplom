@@ -37,7 +37,6 @@ function loadExistingImage(id) {
   webSocket.addEventListener('message', event => {
     try {
       const data = JSON.parse(event.data)
-      console.log(data)
       
       if (data.event === 'pic') {
         webSocketPic(data.pic);
@@ -49,7 +48,7 @@ function loadExistingImage(id) {
       
     } catch (e) {
       onError();
-    }
+    };
   })
   
   webSocket.addEventListener('error', event => onError)
@@ -79,6 +78,7 @@ function webSocketPic(data) {
 };
 
 function initPostingMode() {
+//  добавляем невидимый инпут чтобы с помощью него загружать изображения посредством кнопки "загрузить новое"
   const input = document.createElement('input');
   input.type = 'file';
   input.id = 'file-input';
@@ -86,7 +86,10 @@ function initPostingMode() {
   input.accept = 'image/jpeg, image/png';
   menuAddNewBtn.appendChild(input);
   
-  menuAddNewBtn.addEventListener('click', event => input.click())
+  menuAddNewBtn.addEventListener('click', event => {
+    error.style = 'display: none;';
+    input.click();
+  });
   
   input.addEventListener('change', event => {
     if (event.currentTarget.files[0]) sendImg(event.currentTarget.files[0]);
@@ -94,17 +97,18 @@ function initPostingMode() {
   
   document.addEventListener('dragover', event => event.preventDefault());
   
-  document.addEventListener('drop', event => {
+  document.addEventListener('drop', onDrop);
+  
+  function onDrop(event) {
     event.preventDefault();
     const errorMsg = document.querySelector('.error')
-    console.log(event.dataTransfer.files[0].type.includes('jpeg'))
     if (event.dataTransfer.files[0].type.includes('png') || event.dataTransfer.files[0].type.includes('jpeg')) {
       errorMsg.style = 'display: none;';
       sendImg(event.dataTransfer.files[0]);
     } else {
       errorMsg.style = 'display: block;';
     };
-  });
+  }
   
   function sendImg(file) {
     const formData = new FormData();
@@ -125,7 +129,12 @@ function initPostingMode() {
     })
     .then((res) => { return res.json(); })
     .then((data) => {
-      console.log(data)
+      // при успешной загрузке запрещаем загружать изображения с помощью дропа
+      document.removeEventListener('drop', onDrop)
+      document.addEventListener('drop', event => {
+        errorMsg.textContent = 'Чтобы загрузить новое изображение, пожалуйста, воспользуйтесь пунктом "Загрузить новое" в меню.'
+        error.style = 'display: block;'
+      });
       
       currentImageId = data.id;
       currentImageLink = data.url;
@@ -152,9 +161,12 @@ function initPostingMode() {
 
 function initCommentingMode(loadedComments) {
   const canvas = document.getElementById('canvas'),
-        previousCommentsForm = document.querySelector('.comments__forms');
+        previousCommentsForm = document.querySelector('.comments__forms'),
+        borders = canvas.getBoundingClientRect();
   
-//  удаляем контенер с комментариями к предыдущему изображению, если есть
+  let x = borders.x, y = borders.y
+  
+  //  удаляем контенер с комментариями к предыдущему изображению, если есть
   if (previousCommentsForm) app.removeChild(previousCommentsForm)
   
   // Создание нового контейнера, где будут храниться все формы с комментариями
@@ -178,18 +190,23 @@ function initCommentingMode(loadedComments) {
     };
   });
   
-//  Добавление новой формы в месте клика
+  //  Добавление новой формы в месте клика
   canvas.addEventListener('click', event => {
     if (modeState === 'comments') {
+      const currentImageBorders = currentImage.getBoundingClientRect();
       // Смещение посчитано вручную, зная ширину/высоту маркера и положение маркера относительно самой формы
       // Смогу рассчитать с помощью JS только если уже есть формы с комментариями, но как быть если это первый комментарий? 
       const shiftX = 22,
             shiftY = 15;
       addNewCommentForm(event.clientX - shiftX, event.clientY - shiftY);
-    }
+    };
   });
   
+  //  загружаем комменты если есть и сворачиваем все формы
   if(loadedComments) addLoadedComments(loadedComments);
+  Array.from(commentsForms.children).forEach(form => {
+    form.querySelector('.comments__marker-checkbox').checked = false;
+  });
 };
 
 function initDrawingMode(loadedMask) {
@@ -269,6 +286,15 @@ function initDrawingMode(loadedMask) {
     drawing = false;    
   });
   
+//  двигаем канвас и маску вместе с изображением при изменении размера экрана
+  window.addEventListener('resize', throttle(event => {
+    const imageNewBorder = currentImage.getBoundingClientRect();
+    canvas.style.left = `${imageNewBorder.x}px`;
+    canvas.style.top = `${imageNewBorder.y}px`;
+    mask.style.left = `${imageNewBorder.x}px`;
+    mask.style.top = `${imageNewBorder.y}px`;
+  }));
+  
   function draw(point) {
     ctx.beginPath();
     ctx.lineWidth = brushRadius;
@@ -298,7 +324,7 @@ function initDrawingMode(loadedMask) {
     
   };
   
-
+  
 };
 
 function initSharingMode() {
@@ -420,9 +446,7 @@ function createCommentForm(x, y) {
     ]);
     
     commentsForms.appendChild(form)
-    
-  // Рассчитываем положение так, чтобы хвостик маркера был имеено в месте клика
-    const marker = form.querySelector('.comments__marker');
+
     form.style.left = `${x}px`;
     form.style.top = `${y}px`;
     
@@ -446,14 +470,24 @@ function addNewCommentForm(x, y) {
         sendBtn = form.querySelector('.comments__submit'),
         preloader = form.querySelector('.loader').parentElement,
         markerInput = form.querySelector('.comments__marker-checkbox');
+  
+  const imageBorders = currentImage.getBoundingClientRect();
+  let imageX = imageBorders.x , imageY = imageBorders.y;
 
   const removeForm = () => { form.parentElement.removeChild(form); },
         closeForm = () => { markerInput.checked = false; },
         sendComment = () => {
           if (textarea.value) {
-            const body = 'message=' + encodeURIComponent(textarea.value) +
-                         '&left=' + encodeURIComponent(form.style.left.split('px').join('')) +
-                         '&top=' + encodeURIComponent(form.style.top.split('px').join(''))
+            const currentImageBorders = currentImage.getBoundingClientRect();
+            
+            shiftX = currentImageBorders.x;
+            shiftY = currentImageBorders.y;
+            
+            const x = form.style.left.split('px').join('') - shiftX,
+                  y = form.style.top.split('px').join('') - shiftY,
+                  body = 'message=' + encodeURIComponent(textarea.value) +
+                         '&left=' + encodeURIComponent(x) +
+                         '&top=' + encodeURIComponent(y)
           
             preloader.style = 'display: block;'
             textarea.value = '';
@@ -482,6 +516,27 @@ function addNewCommentForm(x, y) {
             
           };  
         };
+  
+  window.addEventListener('resize', throttle(event => {
+    const allCommentsForms = document.querySelectorAll('.comments__form'),
+          newImageBorders = currentImage.getBoundingClientRect(),
+          newImageX = newImageBorders.x,
+          newImageY = newImageBorders.y, 
+          shiftX = newImageX - imageX,
+          shiftY = newImageY - imageY;
+    
+    
+    Array.from(allCommentsForms).forEach(commentsForm => {
+      const newX = +commentsForm.style.left.split('px').join('') + shiftX / 5,
+            newY = +commentsForm.style.top.split('px').join('') + shiftY / 5;
+      
+      commentsForm.style.left = `${newX}px`;
+      commentsForm.style.top = `${newY}px`;
+    });
+    
+    imageX = newImageX;
+    imageY = newImageY;
+  }))
 
 //  Если в форме есть комментарии, то кнопка закрыть сворачивает форму, если нет, то удаляет
   closeBtn.addEventListener('click', event => {
@@ -533,11 +588,11 @@ function addNewCommentForm(x, y) {
 
 function addLoadedComments(loadedComments) {
   let currentForm;
-  console.log(loadedComments)
   Object.keys(loadedComments).forEach(key => {
     const commentsForms = document.querySelectorAll('.comments__form'),
-          x = loadedComments[key].left,
-          y = loadedComments[key].top;
+          currentImageBorders = currentImage.getBoundingClientRect(),
+          x = Math.round(loadedComments[key].left + currentImageBorders.x),
+          y = Math.round(loadedComments[key].top + currentImageBorders.y);
     
     const existingForm = Array.from(commentsForms).find(commentsForm => {
       return commentsForm.style.left === `${x}px` && commentsForm.style.top === `${y}px`
@@ -548,7 +603,7 @@ function addLoadedComments(loadedComments) {
     const commentBody = currentForm.querySelector('.comments__body'),
           preloader = currentForm.querySelector('.loader').parentElement,
           markerInput = currentForm.querySelector('.comments__marker-checkbox');
-
+    
     const comment = createComment(getTime(loadedComments[key].timestamp), loadedComments[key].message);
     commentBody.insertBefore(comment, preloader)
     markerInput.removeAttribute('disabled');
@@ -559,13 +614,6 @@ function addLoadedComments(loadedComments) {
 function addLoadedMask(maskLink) {
   const mask = document.getElementById('mask');
   mask.src = maskLink;
-  
-  // Как только загрузится обнолвенная маска, очищаем канвас
-  mask.addEventListener('load', event => {
-    const canvas = document.getElementById('canvas'),
-          ctx = canvas.getContext('2d');
-          
-  })
 };
 
 function getTime(timestamp) {
