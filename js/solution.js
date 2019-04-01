@@ -125,8 +125,8 @@ function loadExistingImage(id) {
         // инициализируем моды с полученными данными после загрузки изображения
         currentImage.addEventListener('load', event => {
           preloader.style = 'display: none;';
-          initDrawingMode(data.mask);
-          initCommentingMode(data.comments);
+          initDrawingMode(data.pic.mask);
+          initCommentingMode(data.pic.comments);
           initSharingMode();
         });
       } else if (data.event === 'comment') {
