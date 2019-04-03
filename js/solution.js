@@ -634,7 +634,7 @@ function initDrawingMode(loadedMask) {
 //      ctx.clearRect(0, 0, canvas.width, canvas.height);
 //    };
 //  };
-//};
+};
 
 function addLoadedMask(maskLink) {
   const mask = document.getElementById('mask');
