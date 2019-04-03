@@ -573,9 +573,6 @@ function initDrawingMode(loadedMask) {
       Array.from(menuDrawTools.children).forEach(color => {
         if (color.checked) brushColor = colors[color.value];
       });
-      
-////      запуск отправки данных на сервер
-//      tick();
     };
   })
   
@@ -616,23 +613,6 @@ function initDrawingMode(loadedMask) {
     ctx.quadraticCurveTo(...previousPoint, ...point); 
     ctx.stroke();
     previousPoint = point;
-  };
-  
-  function tick() {
-    //обновление и очистка канваса каждые 2 секунды при рисовании и один раз после того как закончили штрих 
-    if (drawing === true) {
-      const now = new Date();
-      if (now - timestamp >= 2000) {
-        canvas.toBlob(img => webSocket.send(img));
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        timestamp = now;
-      };
-
-      window.requestAnimationFrame(tick);
-    } else {
-      canvas.toBlob(img => webSocket.send(img));
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
   };
 };
 
