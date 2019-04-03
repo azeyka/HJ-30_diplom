@@ -173,18 +173,22 @@ function initPostingMode() {
   
   document.addEventListener('dragover', event => event.preventDefault());
   
-  document.addEventListener('drop', onDrop);
-  
-  function onDrop(event) {
+  document.addEventListener('drop', event => {
     event.preventDefault();
-    const errorMsg = document.querySelector('.error')
-    if (event.dataTransfer.files[0].type.includes('png') || event.dataTransfer.files[0].type.includes('jpeg')) {
-      errorMsg.style = 'display: none;';
-      sendImg(event.dataTransfer.files[0]);
+    // еслми изображение уже есть, то запрещаем загружать новое дропом
+    if (currentImage.hasAttribute('src')) {
+      errorMsg.textContent = 'Чтобы загрузить новое изображение, пожалуйста, воспользуйтесь пунктом "Загрузить новое" в меню.'
+      error.style = 'display: block;';
+      setTimeout(() => { error.style = 'display: none;' }, 3000);
     } else {
-      errorMsg.style = 'display: block;';
+      if (event.dataTransfer.files[0].type.includes('png') || event.dataTransfer.files[0].type.includes('jpeg')) {
+        errorMsg.style = 'display: none;';
+        sendImg(event.dataTransfer.files[0]);
+      } else {
+        errorMsg.style = 'display: block;';
+      };
     };
-  }
+  });
   
   function sendImg(file) {
     const formData = new FormData();
@@ -204,14 +208,7 @@ function initPostingMode() {
       throw new Error(response.statusText);
     })
     .then((res) => { return res.json(); })
-    .then((data) => {
-      // при успешной загрузке запрещаем загружать изображения с помощью дропа
-      document.removeEventListener('drop', onDrop)
-      document.addEventListener('drop', event => {
-        errorMsg.textContent = 'Чтобы загрузить новое изображение, пожалуйста, воспользуйтесь пунктом "Загрузить новое" в меню.'
-        error.style = 'display: block;';
-      });
-      
+    .then((data) => {      
       currentImageId = data.id;
       currentImageLink = data.url;
       currentImage.src = currentImageLink;
@@ -418,14 +415,6 @@ function addNewCommentForm(x, y) {
     event.preventDefault();
     sendComment();
   });
-
-// Отправка комментария на Enter
-  textarea.addEventListener('keydown', event => {
-    if (event.keyCode === 13) {
-      event.preventDefault();
-      sendComment();
-    };
-  });
   
 // При клике на маркер формы сворачиваем остальные и удаляем пустые
   markerInput.addEventListener('click', event => {
@@ -585,8 +574,8 @@ function initDrawingMode(loadedMask) {
         if (color.checked) brushColor = colors[color.value];
       });
       
-//      запуск отправки данных на сервер
-      tick();
+////      запуск отправки данных на сервер
+//      tick();
     };
   })
   
@@ -601,6 +590,13 @@ function initDrawingMode(loadedMask) {
   canvas.addEventListener('mouseleave', event => {
     drawing = false;    
   });
+  
+  canvas.addEventListener('mouseup', debounce(() => {
+    canvas.toBlob(img => webSocket.send(img));
+    mask.addEventListener('load', event => {
+      if (!drawing) ctx.clearRect(0, 0, canvas.width, canvas.height); 
+    })
+  }, 2000))
   
 //  двигаем канвас и маску вместе с изображением при изменении размера экрана
   window.addEventListener('resize', throttle(event => {
@@ -622,27 +618,38 @@ function initDrawingMode(loadedMask) {
     previousPoint = point;
   };
   
-  function tick() {
-    //обновление и очистка канваса каждые 2 секунды при рисовании и один раз после того как закончили штрих 
-    if (drawing === true) {
-      const now = new Date();
-      if (now - timestamp >= 2000) {
-        canvas.toBlob(img => webSocket.send(img));
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        timestamp = now;
-      };
-
-      window.requestAnimationFrame(tick);
-    } else {
-      canvas.toBlob(img => webSocket.send(img));
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
-  };
-};
+//  function tick() {
+//    //обновление и очистка канваса каждые 2 секунды при рисовании и один раз после того как закончили штрих 
+//    if (drawing === true) {
+//      const now = new Date();
+//      if (now - timestamp >= 2000) {
+//        canvas.toBlob(img => webSocket.send(img));
+//        ctx.clearRect(0, 0, canvas.width, canvas.height);
+//        timestamp = now;
+//      };
+//
+//      window.requestAnimationFrame(tick);
+//    } else {
+//      canvas.toBlob(img => webSocket.send(img));
+//      ctx.clearRect(0, 0, canvas.width, canvas.height);
+//    };
+//  };
+//};
 
 function addLoadedMask(maskLink) {
   const mask = document.getElementById('mask');
   mask.src = maskLink;
+};
+
+function debounce(callback, delay) {
+  let timeout;
+  return () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(function() {
+      timeout = null;
+      callback();
+    }, delay);
+  };
 };
 
 
