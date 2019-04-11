@@ -286,7 +286,7 @@ function initCommentingMode(loadedComments) {
     if (event.target.classList.contains('menu__toggle')) {
       Array.from(menuCommentsToolsToggleInputs).forEach(toggle => {
         if (toggle.checked) {
-          commentsForms.style = toggle.value === 'on'? 'display: block;' : 'display: none;';
+          commentsForms.style.display = toggle.value === 'on'? 'block' : 'none';
         };
       });  
     };
@@ -569,31 +569,36 @@ function initDrawingMode(loadedMask) {
   canvas.addEventListener('mousedown', event => {
     if (modeState === 'draw') {
       drawing = true;
+      canvas.style.zIndex = 100;
       previousPoint = [event.offsetX, event.offsetY];
       Array.from(menuDrawTools.children).forEach(color => {
         if (color.checked) brushColor = colors[color.value];
       });
     };
-  })
+  });
   
   canvas.addEventListener('mousemove', throttle(event => {
     if (modeState === 'draw' && drawing) draw([event.offsetX, event.offsetY]);
   }));
   
   canvas.addEventListener('mouseup', event => {
-    drawing = false;    
+    drawing = false;
+    canvas.style.zIndex = 'auto';
   });
   
   canvas.addEventListener('mouseleave', event => {
-    drawing = false;    
+    drawing = false;
+    canvas.style.zIndex = 'auto';
   });
   
   canvas.addEventListener('mouseup', debounce(() => {
-    canvas.toBlob(img => webSocket.send(img));
-    mask.addEventListener('load', event => {
-      if (!drawing) ctx.clearRect(0, 0, canvas.width, canvas.height); 
-    })
-  }, 2000))
+    if (!drawing) {
+      canvas.toBlob(img => webSocket.send(img));
+      mask.addEventListener('load', event => {
+        if (!drawing) ctx.clearRect(0, 0, canvas.width, canvas.height); 
+      });
+    };
+  }, 2000));
   
 //  двигаем канвас и маску вместе с изображением при изменении размера экрана
   window.addEventListener('resize', throttle(event => {
