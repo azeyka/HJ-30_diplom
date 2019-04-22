@@ -154,7 +154,7 @@ function loadExistingImage(id) {
 
 //--------------------загрузить новое--------------------
 function initPostingMode() {
-//  добавляем невидимый инпут чтобы с помощью него загружать изображения посредством кнопки "загрузить новое"
+  // добавляем невидимый инпут чтобы с помощью него загружать изображения посредством кнопки "загрузить новое"
   const input = document.createElement('input');
   input.type = 'file';
   input.id = 'file-input';
@@ -263,7 +263,7 @@ function initCommentingMode(loadedComments) {
   
   let x = borders.x, y = borders.y
   
-  //  удаляем контенер с комментариями к предыдущему изображению, если есть
+  // удаляем контенер с комментариями к предыдущему изображению, если есть
   if (previousCommentsForm) app.removeChild(previousCommentsForm)
   
   // Создание нового контейнера, где будут храниться все формы с комментариями
@@ -292,12 +292,9 @@ function initCommentingMode(loadedComments) {
     };
   });
   
-  //  Добавление новой формы в месте клика
+  // Добавление новой формы в месте клика
   canvas.addEventListener('click', event => {
     if (modeState === 'comments') {
-      
-  //  Смещение посчитано наполовину вручную, так как когда еще нет комментариев - не с чего рассчитывать. 
-  //  Как быть? Вставлять скрытый пример в разметку?
       const currentImageBorders = currentImage.getBoundingClientRect(),
             shiftX = currentImageBorders.x + 20.2,
             shiftY = currentImageBorders.y + 14.5;
@@ -313,7 +310,7 @@ function initCommentingMode(loadedComments) {
     commentsForms.style.top = `${newBorders.y}px`;
   }))
   
-  //  загружаем комменты если есть и сворачиваем все формы
+  // загружаем комменты если есть и сворачиваем все формы
   if(loadedComments) addLoadedComments(loadedComments);
   Array.from(commentsForms.children).forEach(form => {
     form.querySelector('.comments__marker-checkbox').checked = false;
@@ -321,33 +318,33 @@ function initCommentingMode(loadedComments) {
 };
 
 function createCommentForm(x, y) {
-    const commentsForms = document.querySelector('.comments__forms'),
-          form = el('form', {class: 'comments__form'}, [
-      el('span', {class: 'comments__marker'}, ''),
-      el('input', {type: 'checkbox', class: 'comments__marker-checkbox'}, ''),
-      el('div', {class: 'comments__body'}, [
-        el('div', {class: 'comment', style: 'display: none'}, [
-          el('div', {class: 'loader'}, [
-            el('span', {}, ''),
-            el('span', {}, ''),
-            el('span', {}, ''),
-            el('span', {}, ''),
-            el('span', {}, '')
-          ])
-        ]),
-        el('textarea', {class: 'comments__input', type: 'text', placeholder: 'Напишите комментарий...'}, ''),
-        el('input', {class: 'comments__close', type: 'button', value: 'Закрыть'}),
-        el('input', {class: 'comments__submit', type: 'submit', value: 'Отправить'})
-      ])
-    ]);
-    
-    commentsForms.appendChild(form)
+  const commentsForms = document.querySelector('.comments__forms'),
+        form = el('form', {class: 'comments__form'}, [
+    el('span', {class: 'comments__marker'}, ''),
+    el('input', {type: 'checkbox', class: 'comments__marker-checkbox'}, ''),
+    el('div', {class: 'comments__body'}, [
+      el('div', {class: 'comment', style: 'display: none'}, [
+        el('div', {class: 'loader'}, [
+          el('span', {}, ''),
+          el('span', {}, ''),
+          el('span', {}, ''),
+          el('span', {}, ''),
+          el('span', {}, '')
+        ])
+      ]),
+      el('textarea', {class: 'comments__input', type: 'text', placeholder: 'Напишите комментарий...'}, ''),
+      el('input', {class: 'comments__close', type: 'button', value: 'Закрыть'}),
+      el('input', {class: 'comments__submit', type: 'submit', value: 'Отправить'})
+    ])
+  ]);
 
-    form.style.left = `${x}px`;
-    form.style.top = `${y}px`;
-    
-    return form
-  };
+  commentsForms.appendChild(form)
+
+  form.style.left = `${x}px`;
+  form.style.top = `${y}px`;
+
+  return form
+};
   
 function createComment(time, message) {
   const comment = el('div', {class: 'comment'}, [
@@ -404,19 +401,19 @@ function addNewCommentForm(x, y) {
           };  
         };
    
-//  Если в форме есть комментарии, то кнопка закрыть сворачивает форму, если нет, то удаляет
+  // Если в форме есть комментарии, то кнопка закрыть сворачивает форму, если нет, то удаляет
   closeBtn.addEventListener('click', event => {
     const comments = form.querySelectorAll('.comment');
     comments.length <= 1 ? removeForm() : closeForm()    
   });
 
-// Отправка комментария на кнопку отправить
+  // Отправка комментария на кнопку отправить
   sendBtn.addEventListener('click', event => {
     event.preventDefault();
     sendComment();
   });
   
-// При клике на маркер формы сворачиваем остальные и удаляем пустые
+  // При клике на маркер формы сворачиваем остальные и удаляем пустые
   markerInput.addEventListener('click', event => {
     if (event.target.checked) {
       const markers = document.querySelectorAll('.comments__marker-checkbox');
@@ -431,7 +428,7 @@ function addNewCommentForm(x, y) {
   textarea.focus();
   markerInput.setAttribute('disabled', 'disabled');
 
-// При добавлении формы сворачиваем остальные и удаляем пустые
+  // При добавлении формы сворачиваем остальные и удаляем пустые
   Array.from(commentsForms).forEach(previousForm => {
     const markerInput = previousForm.querySelector('.comments__marker-checkbox');
     if (markerInput.hasAttribute('disabled')) {
@@ -452,7 +449,7 @@ function addLoadedComments(loadedComments) {
           x = loadedComments[key].left,
           y = loadedComments[key].top;
     
-// проверяем существует ли форма с такими координатами, если нет - создаем новую, да - добавляем в нее комментарий
+    // проверяем существует ли форма с такими координатами, если нет - создаем новую, да - добавляем в нее комментарий
     const existingForm = Array.from(commentsForms).find(commentsForm => {
       return commentsForm.style.left === `${x}px` && commentsForm.style.top === `${y}px`
     });
@@ -516,7 +513,7 @@ function getTime(timestamp) {
 function initDrawingMode(loadedMask) {
   let timestamp = new Date();
   
-  //  удаляем canvas и маску предыдущего изображения, если есть
+  // удаляем canvas и маску предыдущего изображения, если есть
   const previousCanvas = document.getElementById('canvas'),
         previousMask = document.getElementById('mask');
   if (previousCanvas) app.removeChild(previousCanvas);
@@ -567,14 +564,14 @@ function initDrawingMode(loadedMask) {
   });
   
   canvas.addEventListener('mousedown', event => {
-    if (modeState === 'draw') {
-      drawing = true;
-      canvas.style.zIndex = 100;
-      previousPoint = [event.offsetX, event.offsetY];
-      Array.from(menuDrawTools.children).forEach(color => {
-        if (color.checked) brushColor = colors[color.value];
-      });
-    };
+    if (!(modeState === 'draw')) return;
+    
+    drawing = true;
+    canvas.style.zIndex = 100;
+    previousPoint = [event.offsetX, event.offsetY];
+    Array.from(menuDrawTools.children).forEach(color => {
+      if (color.checked) brushColor = colors[color.value];
+    });
   });
   
   canvas.addEventListener('mousemove', throttle(event => {
@@ -600,7 +597,7 @@ function initDrawingMode(loadedMask) {
     };
   }, 2000));
   
-//  двигаем канвас и маску вместе с изображением при изменении размера экрана
+  // двигаем канвас и маску вместе с изображением при изменении размера экрана
   window.addEventListener('resize', throttle(event => {
     const imageNewBorder = currentImage.getBoundingClientRect();
     canvas.style.left = `${imageNewBorder.x}px`;
